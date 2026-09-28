@@ -5,7 +5,7 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - name: Download Stable Working Kernel Source
         run: |
@@ -16,19 +16,19 @@ jobs:
       - name: Setup Build Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y bc bison build-essential ccache curl flex g++-multilib \
-            gcc-multilib git gnupg gperf libxml2 libxml2-utils lzop pngcrush rsync \
-            schedtool squashfs-tools xsltproc zip zlib1g-dev libssl-dev libelf-dev
+          sudo apt-get install -y bc bison build-essential ccache curl flex libxml2 libxml2-utils \
+            lzop rsync schedtool zip zlib1g-dev libssl-dev libelf-dev binutils-aarch64-linux-gnu
 
       - name: Update Driver Version to 40900
         run: |
           find . -type f \( -name "*.c" -o -name "*.h" -o -name "Makefile" \) -exec sed -i 's/34891/40900/g' {} +
           echo "Driver Version successfully updated to 40900"
 
-      - name: Download Clang Toolchain
+      - name: Download AOSP Clang Toolchain
         run: |
           mkdir clang
-          git clone --depth=1 https://github.com/kdrag0n/proton-clang.git clang
+          wget -q https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/master/clang-r416183b.tar.gz
+          tar -C clang/ -xf clang-r416183b.tar.gz
 
       - name: Download AnyKernel3
         run: |
@@ -44,14 +44,17 @@ jobs:
 
           make O=out vendor/alioth_defconfig \
             CC=clang \
+            CLANG_TRIPLE=aarch64-linux-gnu- \
             CROSS_COMPILE=aarch64-linux-gnu- \
-            CROSS_COMPILE_ARM32=arm-linux-gnueabi-
+            LLVM=1 \
+            LLVM_IAS=1
 
           make -j$(nproc --all) O=out \
             CC=clang \
+            CLANG_TRIPLE=aarch64-linux-gnu- \
             CROSS_COMPILE=aarch64-linux-gnu- \
-            CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
-            AR=llvm-ar NM=llvm-nm OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump STRIP=llvm-strip
+            LLVM=1 \
+            LLVM_IAS=1
 
       - name: Package with AnyKernel3
         run: |
@@ -67,4 +70,3 @@ jobs:
         with:
           name: Alioth_MIUI14_SukiSU_40900
           path: "*.zip"
-          
