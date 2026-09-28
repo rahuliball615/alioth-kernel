@@ -27,7 +27,6 @@ jobs:
 
       - name: Fix Broken ZRAM Driver Code
         run: |
-          # Define missing glow_compress_ratio if undeclared in zram_drv.c
           sed -i '1i #define glow_compress_ratio 0' drivers/block/zram/zram_drv.c
           echo "ZRAM patch applied successfully"
 
@@ -60,10 +59,15 @@ jobs:
           if [ -n "$ALIOTH_CFG" ]; then
             make O=out $BASE_CONFIG CC=clang LLVM=1 LLVM_IAS=1
             ./scripts/kconfig/merge_config.sh -m -O out out/.config "$ALIOTH_CFG"
-            make O=out olddefconfig CC=clang LLVM=1 LLVM_IAS=1
           else
             make O=out $BASE_CONFIG CC=clang LLVM=1 LLVM_IAS=1
           fi
+
+          # Disable unused audio amp config that causes the cs35l41 failure
+          ./scripts/config --file out/.config --disable CONFIG_SND_SOC_CS35L41
+          ./scripts/config --file out/.config --disable CONFIG_SND_SOC_CS35L41_I2C
+          ./scripts/config --file out/.config --disable CONFIG_SND_SOC_CS35L41_SPI
+          make O=out olddefconfig CC=clang LLVM=1 LLVM_IAS=1
 
           # Compile Kernel Image and DTBs
           make -j$(nproc --all) O=out \
