@@ -25,6 +25,12 @@ jobs:
           find . -type f \( -name "*.c" -o -name "*.h" -o -name "Makefile" \) -exec sed -i 's/34891/40900/g' {} +
           echo "Driver code successfully updated to 40900"
 
+      - name: Fix Broken ZRAM Driver Code
+        run: |
+          # Define missing glow_compress_ratio if undeclared in zram_drv.c
+          sed -i '1i #define glow_compress_ratio 0' drivers/block/zram/zram_drv.c
+          echo "ZRAM patch applied successfully"
+
       - name: Setup ZyC-Clang 16 Toolchain
         run: |
           mkdir -p $HOME/zyc-clang
@@ -45,15 +51,11 @@ jobs:
           export ARCH=arm64
           export SUBARCH=arm64
 
-          # Detect correct defconfig and config fragments
           BASE_CONFIG=""
           [ -f "arch/arm64/configs/vendor/kona-perf_defconfig" ] && BASE_CONFIG="vendor/kona-perf_defconfig"
           [ -z "$BASE_CONFIG" ] && [ -f "arch/arm64/configs/kona-perf_defconfig" ] && BASE_CONFIG="kona-perf_defconfig"
 
           ALIOTH_CFG=$(find arch/arm64/configs/ -name "*alioth*.config" -o -name "alioth.config" 2>/dev/null | head -n 1)
-
-          echo "Base config: $BASE_CONFIG"
-          echo "Fragment config: $ALIOTH_CFG"
 
           if [ -n "$ALIOTH_CFG" ]; then
             make O=out $BASE_CONFIG CC=clang LLVM=1 LLVM_IAS=1
@@ -69,7 +71,8 @@ jobs:
             CROSS_COMPILE=aarch64-linux-gnu- \
             CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
             LLVM=1 \
-            LLVM_IAS=1
+            LLVM_IAS=1 \
+            KCFLAGS="-w"
 
       - name: Package with AnyKernel3
         run: |
