@@ -10,7 +10,7 @@ jobs:
       - name: Download Stable Working Kernel Source
         run: |
           wget https://github.com/AstideLabs/android_kernel_xiaomi_sm8250/archive/refs/tags/v20260505-cbbad411.tar.gz
-          tar -xvf v20260505-cbbad411.tar.gz
+          tar -xf v20260505-cbbad411.tar.gz
           mv android_kernel_xiaomi_sm8250-20260505-cbbad411/* .
 
       - name: Setup Build Dependencies
@@ -24,11 +24,9 @@ jobs:
           find . -type f \( -name "*.c" -o -name "*.h" -o -name "Makefile" \) -exec sed -i 's/34891/40900/g' {} +
           echo "Driver Version successfully updated to 40900"
 
-      - name: Download AOSP Clang Toolchain
+      - name: Download Prebuilt Clang Toolchain
         run: |
-          mkdir clang
-          wget -q https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/master/clang-r416183b.tar.gz
-          tar -C clang/ -xf clang-r416183b.tar.gz
+          git clone --depth=1 https://gitlab.com/crdroidandroid/android_prebuilts_clang_host_linux-x86_clang-r416183b.git clang
 
       - name: Download AnyKernel3
         run: |
@@ -44,14 +42,12 @@ jobs:
 
           make O=out vendor/alioth_defconfig \
             CC=clang \
-            CLANG_TRIPLE=aarch64-linux-gnu- \
             CROSS_COMPILE=aarch64-linux-gnu- \
             LLVM=1 \
             LLVM_IAS=1
 
           make -j$(nproc --all) O=out \
             CC=clang \
-            CLANG_TRIPLE=aarch64-linux-gnu- \
             CROSS_COMPILE=aarch64-linux-gnu- \
             LLVM=1 \
             LLVM_IAS=1
