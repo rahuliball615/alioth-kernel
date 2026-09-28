@@ -7,23 +7,16 @@ jobs:
   build:
     runs-on: ubuntu-22.04
     steps:
-      - name: Setup Build Environment & Toolchain
+      - name: Setup Build Dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y bc bison build-essential ccache curl flex gawk \
-            git gnupg gperf libncurses-dev libssl-dev libxml2 libxml2-utils lzop \
-            pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev \
-            binutils-aarch64-linux-gnu clang-14 lld-14 llvm-14
-          
-          # Setup direct aliases/symlinks for LLVM tools
-          sudo update-alternatives --install /usr/bin/clang clang /usr/bin/clang-14 100
-          sudo update-alternatives --install /usr/bin/ld.lld ld.lld /usr/bin/lld-14 100
-          sudo update-alternatives --install /usr/bin/llvm-ar llvm-ar /usr/bin/llvm-ar-14 100
-          sudo update-alternatives --install /usr/bin/llvm-nm llvm-nm /usr/bin/llvm-nm-14 100
-          sudo update-alternatives --install /usr/bin/llvm-objcopy llvm-objcopy /usr/bin/llvm-objcopy-14 100
-          sudo update-alternatives --install /usr/bin/llvm-strip llvm-strip /usr/bin/llvm-strip-14 100
+            git gnupg gperf imagemagick libncurses-dev \
+            lib32readline-dev lib32z1-dev liblz4-tool \
+            libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync \
+            schedtool squashfs-tools xsltproc zip zlib1g-dev python3 binutils-aarch64-linux-gnu
 
-      - name: Clone Working Kernel Source (cbbad411 only)
+      - name: Clone Working Kernel Source (cbbad411)
         run: |
           git clone --depth=1 --branch v20260505-cbbad411 https://github.com/AstideLabs/android_kernel_xiaomi_sm8250.git .
 
@@ -32,37 +25,18 @@ jobs:
           find . -type f \( -name "*.c" -o -name "*.h" -o -name "Makefile" \) -exec sed -i 's/34891/40900/g' {} +
           echo "Driver code successfully updated to 40900"
 
-      - name: Clone AnyKernel3
+      - name: Setup ZyC-Clang 16 Toolchain
         run: |
-          git clone --depth=1 https://github.com/osm0sis/AnyKernel3.git AnyKernel3
-          sed -i 's/device.name1=.*/device.name1=alioth/' AnyKernel3/anykernel.sh
-          sed -i 's/device.name2=.*/device.name2=aliothin/' AnyKernel3/anykernel.sh
+          mkdir -p $HOME/zyc-clang
+          cd $HOME/zyc-clang
+          wget -q https://github.com/ZyCromerZ/Clang/releases/download/16.0.6-20260807-release/Clang-16.0.6-20260807.tar.gz
+          tar -zxf Clang-16.0.6-20260807.tar.gz
+          echo "$HOME/zyc-clang/bin" >> $GITHUB_PATH
 
-      - name: Compile Stable Kernel
+      - name: Run Official Build Script for Alioth MIUI
         run: |
-          export ARCH=arm64
-          export SUBARCH=arm64
-
-          make O=out vendor/alioth_defconfig \
-            CC=clang \
-            CROSS_COMPILE=aarch64-linux-gnu- \
-            LLVM=1 \
-            LLVM_IAS=1
-
-          make -j$(nproc --all) O=out \
-            CC=clang \
-            CROSS_COMPILE=aarch64-linux-gnu- \
-            LLVM=1 \
-            LLVM_IAS=1
-
-      - name: Create Flashable Zip
-        run: |
-          cp out/arch/arm64/boot/Image AnyKernel3/
-          cp out/arch/arm64/boot/dtbo.img AnyKernel3/ 2>/dev/null || true
-          cp out/arch/arm64/boot/dts/vendor/qcom/*.dtb AnyKernel3/dtb 2>/dev/null || true
-
-          cd AnyKernel3
-          zip -r9 ../APTKernel_MIUI_alioth_ReSukiSU-SuSFS_40900.zip * -x .git README.md *placeholder
+          chmod +x build_kernel.sh
+          ./build_kernel.sh alioth ksu miui
 
       - name: Upload Kernel Artifact
         uses: actions/upload-artifact@v4
