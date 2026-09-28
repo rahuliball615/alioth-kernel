@@ -33,10 +33,52 @@ jobs:
           tar -zxf Clang-16.0.6-20260807.tar.gz
           echo "$HOME/zyc-clang/bin" >> $GITHUB_PATH
 
-      - name: Run Official Build Script for Alioth MIUI
+      - name: Clone AnyKernel3
         run: |
-          chmod +x build_kernel.sh
-          ./build_kernel.sh alioth ksu miui
+          git clone --depth=1 https://github.com/osm0sis/AnyKernel3.git AnyKernel3
+          sed -i 's/device.name1=.*/device.name1=alioth/' AnyKernel3/anykernel.sh
+          sed -i 's/device.name2=.*/device.name2=aliothin/' AnyKernel3/anykernel.sh
+
+      - name: Configure and Compile Kernel
+        run: |
+          export PATH="$HOME/zyc-clang/bin:$PATH"
+          export ARCH=arm64
+          export SUBARCH=arm64
+
+          # Detect correct defconfig and config fragments
+          BASE_CONFIG=""
+          [ -f "arch/arm64/configs/vendor/kona-perf_defconfig" ] && BASE_CONFIG="vendor/kona-perf_defconfig"
+          [ -z "$BASE_CONFIG" ] && [ -f "arch/arm64/configs/kona-perf_defconfig" ] && BASE_CONFIG="kona-perf_defconfig"
+
+          ALIOTH_CFG=$(find arch/arm64/configs/ -name "*alioth*.config" -o -name "alioth.config" 2>/dev/null | head -n 1)
+
+          echo "Base config: $BASE_CONFIG"
+          echo "Fragment config: $ALIOTH_CFG"
+
+          if [ -n "$ALIOTH_CFG" ]; then
+            make O=out $BASE_CONFIG CC=clang LLVM=1 LLVM_IAS=1
+            ./scripts/kconfig/merge_config.sh -m -O out out/.config "$ALIOTH_CFG"
+            make O=out olddefconfig CC=clang LLVM=1 LLVM_IAS=1
+          else
+            make O=out $BASE_CONFIG CC=clang LLVM=1 LLVM_IAS=1
+          fi
+
+          # Compile Kernel Image and DTBs
+          make -j$(nproc --all) O=out \
+            CC=clang \
+            CROSS_COMPILE=aarch64-linux-gnu- \
+            CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
+            LLVM=1 \
+            LLVM_IAS=1
+
+      - name: Package with AnyKernel3
+        run: |
+          cp out/arch/arm64/boot/Image AnyKernel3/
+          cp out/arch/arm64/boot/dtbo.img AnyKernel3/ 2>/dev/null || true
+          cp out/arch/arm64/boot/dts/vendor/qcom/*.dtb AnyKernel3/dtb 2>/dev/null || true
+
+          cd AnyKernel3
+          zip -r9 ../APTKernel_MIUI_alioth_ReSukiSU-SuSFS_40900.zip * -x .git README.md *placeholder
 
       - name: Upload Kernel Artifact
         uses: actions/upload-artifact@v4
