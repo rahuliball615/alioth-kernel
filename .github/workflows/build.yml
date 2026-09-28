@@ -1,0 +1,70 @@
+name: Build Alioth SukiSU 40900
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Stable Working Kernel Source
+        run: |
+          wget https://github.com/AstideLabs/android_kernel_xiaomi_sm8250/archive/refs/tags/v20260505-cbbad411.tar.gz
+          tar -xvf v20260505-cbbad411.tar.gz
+          mv android_kernel_xiaomi_sm8250-20260505-cbbad411/* .
+
+      - name: Setup Build Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bc bison build-essential ccache curl flex g++-multilib \
+            gcc-multilib git gnupg gperf libxml2 libxml2-utils lzop pngcrush rsync \
+            schedtool squashfs-tools xsltproc zip zlib1g-dev libssl-dev libelf-dev
+
+      - name: Update Driver Version to 40900
+        run: |
+          find . -type f \( -name "*.c" -o -name "*.h" -o -name "Makefile" \) -exec sed -i 's/34891/40900/g' {} +
+          echo "Driver Version successfully updated to 40900"
+
+      - name: Download Clang Toolchain
+        run: |
+          mkdir clang
+          git clone --depth=1 https://github.com/kdrag0n/proton-clang.git clang
+
+      - name: Download AnyKernel3
+        run: |
+          git clone --depth=1 https://github.com/osm0sis/AnyKernel3.git AnyKernel3
+          sed -i 's/device.name1=.*/device.name1=alioth/' AnyKernel3/anykernel.sh
+          sed -i 's/device.name2=.*/device.name2=aliothin/' AnyKernel3/anykernel.sh
+
+      - name: Compile Kernel
+        run: |
+          export PATH="$(pwd)/clang/bin:$PATH"
+          export ARCH=arm64
+          export SUBARCH=arm64
+
+          make O=out vendor/alioth_defconfig \
+            CC=clang \
+            CROSS_COMPILE=aarch64-linux-gnu- \
+            CROSS_COMPILE_ARM32=arm-linux-gnueabi-
+
+          make -j$(nproc --all) O=out \
+            CC=clang \
+            CROSS_COMPILE=aarch64-linux-gnu- \
+            CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
+            AR=llvm-ar NM=llvm-nm OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump STRIP=llvm-strip
+
+      - name: Package with AnyKernel3
+        run: |
+          cp out/arch/arm64/boot/Image AnyKernel3/
+          cp out/arch/arm64/boot/dtbo.img AnyKernel3/ 2>/dev/null || true
+          cp out/arch/arm64/boot/dts/vendor/qcom/*.dtb AnyKernel3/dtb 2>/dev/null || true
+
+          cd AnyKernel3
+          zip -r9 ../Alioth_MIUI14_SukiSU_40900.zip * -x .git README.md *placeholder
+
+      - name: Upload Flashable ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: Alioth_MIUI14_SukiSU_40900
+          path: "*.zip"
+          
